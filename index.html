@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vyhledávání zásilek</title>
+    <style>
+        :root {
+            --primary-blue: #007bff;
+            --primary-hover: #0056b3;
+            --success-green: #28a745;
+            --danger-red: #dc3545;
+            --gray-light: #f8f9fa;
+            --gray-border: #dee2e6;
+            --text-dark: #343a40;
+            --text-muted: #6c757d;
+            --shadow: 0 4px 6px rgba(0,0,0,0.1);
+            --radius: 8px;
+            --highlight-color: #ffeb3b;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            color: var(--text-dark);
+            margin: 0;
+            padding: 10px;
+            line-height: 1.6;
+            scroll-behavior: smooth;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 15px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+        }
+
+        @media (min-width: 600px) {
+            body { padding: 20px; }
+            .container { padding: 30px; }
+        }
+
+        h1 { margin-bottom: 5px; font-size: 1.6rem; }
+        h2 { font-size: 1.2rem; margin-top: 25px; margin-bottom: 15px; color: #495057; border-left: 4px solid var(--primary-blue); padding-left: 10px; }
+        
+        .divider { height: 1px; background: var(--gray-border); margin: 25px 0; }
+
+        .search-group { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; }
+        @media (min-width: 500px) { .search-group { flex-direction: row; } }
+
+        .form-control { 
+            width: 100%; padding: 12px; border: 1px solid var(--gray-border); 
+            border-radius: 4px; font-size: 1rem; box-sizing: border-box;
+        }
+
+        .btn {
+            border: none; padding: 12px 25px; border-radius: 4px; font-size: 1rem; cursor: pointer;
+            background: var(--primary-blue); color: white; font-weight: bold; transition: 0.2s;
+            text-align: center; white-space: nowrap;
+        }
+        .btn:hover { background: var(--primary-hover); }
+
+        .filter-grid {
+            display: grid; grid-template-columns: 1fr; gap: 15px;
+        }
+        @media (min-width: 600px) { .filter-grid { grid-template-columns: 1fr 1fr; } }
+
+        #results-section { margin-top: 40px; padding-top: 20px; border-top: 3px solid var(--primary-blue); }
+
+        .shipment-item {
+            border: 1px solid var(--gray-border); border-radius: var(--radius);
+            margin-bottom: 12px; background: white; overflow: hidden;
+        }
+
+        .shipment-header {
+            padding: 15px; background: var(--gray-light); cursor: pointer;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        .status-badge {
+            font-size: 0.7rem; padding: 3px 8px; border-radius: 4px; font-weight: bold;
+            text-transform: uppercase; margin-left: 10px;
+        }
+        .badge-active { color: white; background-color: var(--success-green); }
+        .badge-archived { color: white; background-color: var(--danger-red); }
+
+        /* Vzhled detailů přesně podle zadání */
+        .shipment-details { display: none; padding: 20px; border-top: 1px solid var(--gray-border); }
+        .info-label { font-weight: bold; display: block; margin-top: 10px; color: #555; font-size: 0.9rem; }
+        .info-value { display: block; margin-bottom: 5px; color: #000; }
+        .info-label:first-child { margin-top: 0; }
+
+        .highlight { background-color: var(--highlight-color); font-weight: bold; padding: 0 2px; }
+
+        .secondary-filters { background: #fff3cd; padding: 15px; border-radius: var(--radius); margin-bottom: 20px; display: none; }
+        .sec-filter-flex { display: flex; flex-direction: column; gap: 15px; }
+        @media (min-width: 700px) { 
+            .sec-filter-flex { flex-direction: row; align-items: flex-end; } 
+            .sec-filter-flex > div { flex: 1; }
+        }
+
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.9); display: none; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 9999;
+        }
+        .spinner {
+            border: 6px solid #f3f3f3; border-top: 6px solid var(--primary-blue);
+            border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <a href="https://nts-windows-tools.github.io/moje-zasilky-5d6gh45fhz65f655hn4zj65/" style="text-decoration: none; color: var(--primary-blue); font-size: 0.9rem;">← Zpět na seznam</a>
+    <h1>Prohledávat zásilky</h1>
+    <div class="divider"></div>
+
+    <h2>Hledání podle klíčových slov</h2>
+    <p style="font-size: 0.9rem;">Zde napsat libovolná klíčová slova pro hledání:</p>
+    <div class="search-group">
+        <input type="text" id="kw-input" class="form-control" placeholder="Hledat dle libovolných slov...">
+        <button class="btn" onclick="runKeywordSearch()">Hledat ➔</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <h2>Zadat dle filtrů</h2>
+    <div class="filter-grid">
+        <div>
+            <label style="font-size: 0.85rem; font-weight: bold;">Dopravce:</label>
+            <select id="f-carrier" class="form-control" onchange="runFilterSearch()">
+                <option value="">Všichni dopravci</option>
+            </select>
+        </div>
+        <div>
+            <label style="font-size: 0.85rem; font-weight: bold;">Číslo zásilky:</label>
+            <input type="text" id="f-tracking" class="form-control" list="dl-tracking" onchange="runFilterSearch()" placeholder="Sledovací číslo">
+        </div>
+        <div>
+            <label style="font-size: 0.85rem; font-weight: bold;">Telefonní číslo:</label>
+            <input type="text" id="f-phone" class="form-control" list="dl-phone" onchange="runFilterSearch()" placeholder="Telefon">
+        </div>
+        <div>
+            <label style="font-size: 0.85rem; font-weight: bold;">Jméno na balíku:</label>
+            <input type="text" id="f-name" class="form-control" list="dl-name" onchange="runFilterSearch()" placeholder="Jméno příjemce">
+        </div>
+    </div>
+
+    <div id="results-section">
+        <h2 id="res-title">Výsledky hledání</h2>
+        
+        <div id="kw-secondary" class="secondary-filters">
+            <div class="sec-filter-flex">
+                <div>
+                    <label style="font-size: 0.85rem; font-weight: bold;">Filtrovat dle dopravce:</label>
+                    <select id="sec-carrier" class="form-control" style="background: white;" onchange="applyFinalFilters()"></select>
+                </div>
+                <div>
+                    <label style="font-size: 0.85rem; font-weight: bold;">Filtrovat dle odesílatele:</label>
+                    <input type="text" id="sec-sender" class="form-control" style="background: white;" placeholder="Odesílatel...">
+                </div>
+                <button class="btn" onclick="applyFinalFilters()">Filtrovat</button>
+            </div>
+        </div>
+
+        <div id="results-container">
+            <p style="color: gray; text-align: center;">Zadejte hledání nebo filtr výše...</p>
+        </div>
+    </div>
+</div>
+
+<datalist id="dl-tracking"></datalist>
+<datalist id="dl-phone"></datalist>
+<datalist id="dl-name"></datalist>
+
+<div id="loading" class="overlay">
+    <div class="spinner"></div>
+    <p><b>Hledám</b></p>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyDw5HkQQDZkgUqsjQ1QNiiPryK2alAUpV4",
+        authDomain: "moje-zasilky-8e824.firebaseapp.com",
+        databaseURL: "https://moje-zasilky-8e824-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "moje-zasilky-8e824"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    let allData = [];
+    let foundData = [];
+    let currentKw = "";
+
+    onValue(ref(db, 'shipments'), (snap) => {
+        const val = snap.val();
+        allData = val ? Object.entries(val).map(([id, data]) => ({ id, ...data })) : [];
+        updateDatalists();
+    });
+
+    onValue(ref(db, 'custom_carriers'), (snap) => {
+        const carriers = ["Zásilkovna", "Balíkovna", "Česká pošta", "DPD", "PPL", "One by Allegro / WE|DO"];
+        const custom = snap.val() ? Object.values(snap.val()) : [];
+        const final = [...new Set([...carriers, ...custom])];
+        const selects = [document.getElementById('f-carrier'), document.getElementById('sec-carrier')];
+        selects.forEach(s => {
+            s.innerHTML = '<option value="">Všechny</option>';
+            final.forEach(c => s.innerHTML += `<option value="${c}">${c}</option>`);
+        });
+    });
+
+    window.runKeywordSearch = () => {
+        const kw = document.getElementById('kw-input').value.trim();
+        if (!kw) return;
+        currentKw = kw;
+        document.getElementById('loading').style.display = 'flex';
+        setTimeout(() => {
+            foundData = allData.filter(item => {
+                const searchString = JSON.stringify(item).toLowerCase();
+                return searchString.includes(kw.toLowerCase());
+            });
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('kw-secondary').style.display = 'block';
+            render(foundData);
+            document.getElementById('results-section').scrollIntoView();
+        }, 800);
+    };
+
+    window.runFilterSearch = () => {
+        currentKw = "";
+        document.getElementById('kw-secondary').style.display = 'none';
+        const fC = document.getElementById('f-carrier').value;
+        const fT = document.getElementById('f-tracking').value.replace(/\s/g, '').toLowerCase();
+        const fP = document.getElementById('f-phone').value.replace(/\s/g, '').toLowerCase();
+        const fN = document.getElementById('f-name').value.toLowerCase();
+        foundData = allData.filter(item => {
+            const matchC = !fC || item.carrier === fC;
+            const matchT = !fT || item.tracking?.replace(/\s/g, '').toLowerCase().includes(fT);
+            const matchP = !fP || item.phone?.replace(/\s/g, '').toLowerCase().includes(fP);
+            const matchN = !fN || item.recipient?.toLowerCase().includes(fN);
+            return matchC && matchT && matchP && matchN;
+        });
+        render(foundData);
+        document.getElementById('results-section').scrollIntoView();
+    };
+
+    window.applyFinalFilters = () => {
+        const fC = document.getElementById('sec-carrier').value;
+        const fS = document.getElementById('sec-sender').value.toLowerCase();
+        const filtered = foundData.filter(item => {
+            const matchC = !fC || item.carrier === fC;
+            const matchS = !fS || (item.sender && item.sender.toLowerCase().includes(fS));
+            return matchC && matchS;
+        });
+        render(filtered);
+    };
+
+    function render(items) {
+        const container = document.getElementById('results-container');
+        if (items.length === 0) {
+            container.innerHTML = '<p style="text-align:center; padding: 30px; background:#f9f9f9; border-radius:8px;">Nic nenalezeno</p>';
+            return;
+        }
+        items.sort((a, b) => {
+            if (a.archived !== b.archived) return a.archived ? 1 : -1;
+            const parseD = (s) => { if(!s) return 0; const p = s.split('.'); return new Date(p[2], p[1]-1, p[0]).getTime(); };
+            return parseD(b.archivedDate) - parseD(a.archivedDate);
+        });
+        container.innerHTML = "";
+
+        // URL mapy pro sledování
+        const trackingUrlMap = {
+            "Zásilkovna": "https://tracking.packeta.com/cs/XXXXXXXXX",
+            "Balíkovna": "https://www.balikovna.cz/cs/sledovat-balik/-/balik/XXXXXXXXX",
+            "DPD": "https://www.dpdgroup.com/cz/mydpd/my-parcels/incoming?parcelNumber=XXXXXXXXX",
+            "PPL": "https://www.ppl.cz/vyhledat-zasilku?shipmentId=XXXXXXXXX",
+            "Česká pošta": "https://www.postaonline.cz/trackandtrace/-/zasilka/cislo?parcelNumbers=XXXXXXXXX",
+            "One by Allegro / WE|DO": "https://onedelivery.cz/sledovani-zasilky?numer=XXXXXXXXX",
+            "Alza": "https://alza.cz/my-account/order-details-XXXXXXXXX.htm"
+
+
+        };
+
+        items.forEach(item => {
+            const div = document.createElement('div');
+            div.className = "shipment-item";
+            const status = item.archived ? '<span class="status-badge badge-archived">Archivováno</span>' : '<span class="status-badge badge-active">Aktivní</span>';
+            
+            // Logika pro "Jiné" u jména a telefonu
+            const nameDisp = item.recipientType === "other" ? "Jiné: " + (item.recipient || "") : (item.recipient || "");
+            const phoneDisp = item.phoneType === "other" ? "Jiné: " + (item.phone || "") : (item.phone || "");
+            const deliveryDisp = item.deliveryType + (item.deliveryTarget ? " (" + item.deliveryTarget + ")" : "");
+
+            // LOGIKA PRO ODZKAZ NA SLEDOVÁNÍ
+            let trackingHtml = highlight(item.tracking);
+            if (item.carrier && trackingUrlMap[item.carrier] && item.tracking) {
+                const url = trackingUrlMap[item.carrier].replace("XXXXXXXXX", item.tracking);
+                trackingHtml = `<a href="${url}" target="_blank" style="color: var(--primary-blue); text-decoration: underline;">${highlight(item.tracking)}</a>`;
+            }
+
+            div.innerHTML = `
+                <div class="shipment-header" onclick="const d = this.nextElementSibling; d.style.display = d.style.display === 'block' ? 'none' : 'block'">
+                    <div>
+                        <div style="font-weight:bold; font-size:1rem;">${highlight(item.name || 'Zásilka')}</div>
+                        <div style="font-size:0.8rem; color:gray;">${item.archivedDate || 'Aktivní'}</div>
+                    </div>
+                    <div style="display:flex; align-items:center;">
+                        ${status} <span style="margin-left:15px; font-size:0.8rem;">▼</span>
+                    </div>
+                </div>
+                <div class="shipment-details">
+                    <span class="info-label">Dopravce:</span>
+                    <span class="info-value">${highlight(item.carrier)}</span>
+
+                    <span class="info-label">Číslo zásilky:</span>
+                    <span class="info-value">${trackingHtml}</span>
+
+                    <span class="info-label">Příjemce:</span>
+                    <span class="info-value">${highlight(nameDisp)}</span>
+
+                    <span class="info-label">Telefon:</span>
+                    <span class="info-value">${highlight(phoneDisp)}</span>
+
+                    <span class="info-label">Doručení:</span>
+                    <span class="info-value">${highlight(deliveryDisp)}</span>
+
+                    <span class="info-label">Odesílatel:</span>
+                    <span class="info-value">${highlight(item.sender)}</span>
+
+                    <span class="info-label">Poznámka:</span>
+                    <span class="info-value">${highlight(item.note)}</span>
+                </div>`;
+            container.appendChild(div);
+        });
+    }
+
+    function highlight(text) {
+        if (!text || !currentKw) return text || "";
+        const regex = new RegExp(`(${currentKw.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')})`, "gi");
+        return text.toString().replace(regex, '<span class="highlight">$1</span>');
+    }
+
+    function updateDatalists() {
+        const sets = { 'dl-tracking': 'tracking', 'dl-phone': 'phone', 'dl-name': 'recipient' };
+        for (const [id, key] of Object.entries(sets)) {
+            const dl = document.getElementById(id);
+            const vals = [...new Set(allData.map(i => i[key]).filter(Boolean))];
+            dl.innerHTML = vals.map(v => `<option value="${v}">`).join('');
+        }
+    }
+</script>
+</body>
+</html>
+
+
